@@ -1,0 +1,15 @@
+# segredos e configuração local
+.env
+sal.txt
+*.pem
+
+# Airflow local
+logs/
+config/
+plugins/__pycache__/
+chegada/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alerta Chuva SP</title>
+<meta name="description" content="Alerta de chuva forte e alagamento na Grande São Paulo. Dados da camada Ouro do pipeline CitizenTech.">
+<style>
+:root{
+  --bg:#f4f6f8; --card:#ffffff; --ink:#14212b; --muted:#5b6b78; --line:#dde3e8;
+  --brand:#0b5fa5; --ok:#1f8a4c; --ok-bg:#e7f5ed; --warn:#c2410c; --warn-bg:#fff1e8;
+  --i0:#d5dde3; --i1:#8cc8f0; --i2:#2f7fd0; --i3:#f08a24; --i4:#d42a2a;
+  --shadow:0 1px 2px rgba(20,33,43,.06),0 4px 16px rgba(20,33,43,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e161d; --card:#16222c; --ink:#e8eef3; --muted:#9aabb8; --line:#26343f;
+    --brand:#5fb0f5; --ok:#4cc184; --ok-bg:#13301f; --warn:#ff9a5c; --warn-bg:#3a2014;
+    --i0:#33424e; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e161d; --card:#16222c; --ink:#e8eef3; --muted:#9aabb8; --line:#26343f;
+  --brand:#5fb0f5; --ok:#4cc184; --ok-bg:#13301f; --warn:#ff9a5c; --warn-bg:#3a2014;
+  --i0:#33424e; --shadow:none;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 40px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px}
+.logo{display:flex;align-items:center;gap:10px}
+.logo svg{flex:none}
+h1{font-size:22px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.controls{display:flex;flex-wrap:wrap;gap:10px}
+label.ctl{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:190px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.card h2{font-size:15px;margin:0 0 2px}
+.card .q{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+.grid{display:grid;gap:16px}
+.g-hero{grid-template-columns:1.25fr 1fr}
+.g-3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:900px){.g-hero,.g-3{grid-template-columns:1fr}}
+.status{border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.status.ok{background:var(--ok-bg);color:var(--ok)}
+.status.warn{background:var(--warn-bg);color:var(--warn)}
+.status b{display:block;font-size:20px;line-height:1.25;color:inherit}
+.status span{color:var(--ink);opacity:.85;font-size:13.5px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi .v{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:11.5px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 4px;border-bottom:1px solid var(--line)}
+td{padding:7px 4px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+td.n,th.n{text-align:right}
+tr.sel td{background:color-mix(in srgb,var(--brand) 10%,transparent)}
+.bar{height:8px;border-radius:4px;background:var(--brand);min-width:2px}
+.impact{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:760px){.impact{grid-template-columns:repeat(2,1fr)}}
+.impact .v{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.impact .l{font-size:12.5px;color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);margin-top:12px}
+footer{margin-top:22px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
+.mapsvg text{font-size:11px;fill:var(--ink);paint-order:stroke;stroke:var(--card);stroke-width:3px;stroke-linejoin:round}
+.empty{text-align:center;padding:60px 16px}
+.empty input{margin-top:12px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="9" fill="var(--brand)"/><path d="M10 17a7 7 0 0 1 13.6-2.3A5 5 0 0 1 23 24.5H12A4.5 4.5 0 0 1 10 17z" fill="#fff"/><path d="M14 27l-1 3M19 27l-1 3M24 27l-1 3" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      <div>
+        <h1>Alerta Chuva SP</h1>
+        <p class="sub">Chuva forte e alagamento na Grande São Paulo</p>
+      </div>
+    </div>
+    <div class="controls" id="controls" hidden>
+      <label class="ctl">Meu município<select id="selMun"></select></label>
+      <label class="ctl">Dia<select id="selDia"></select></label>
+    </div>
+  </header>
+
+  <main id="app" hidden>
+    <section class="grid g-hero">
+      <div class="card">
+        <h2 id="tituloDia">Hoje</h2>
+        <p class="q">Vai chover forte no meu município? A partir de que horas?</p>
+        <div id="status" class="status"></div>
+        <div class="kpis" id="kpis"></div>
+        <svg id="chHoras" class="chart" viewBox="0 0 600 200" role="img" aria-label="Chuva por hora"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="card">
+        <h2>Mapa do dia</h2>
+        <p class="q">Maior intensidade de chuva em cada município e relatos de alagamento</p>
+        <svg id="mapa" class="chart mapsvg" viewBox="0 0 420 330" role="img" aria-label="Mapa dos municípios"></svg>
+        <p class="note">Tamanho do círculo = população. Toque num município para selecioná-lo.</p>
+      </div>
+    </section>
+
+    <section class="grid g-3" style="margin-top:16px">
+      <div class="card">
+        <h2>Ranking de risco · 30 dias</h2>
+        <p class="q">Quais municípios tiveram mais horas de chuva forte?</p>
+        <table id="tbRanking"></table>
+      </div>
+      <div class="card">
+        <h2>Horário de risco</h2>
+        <p class="q">Em que horário do dia a chuva forte costuma cair?</p>
+        <svg id="chHorario" class="chart" viewBox="0 0 320 190" role="img" aria-label="Horas em alerta por hora do dia"></svg>
+        <p class="note" id="dicaHorario"></p>
+      </div>
+      <div class="card">
+        <h2>Onde mais alaga</h2>
+        <p class="q">Relatos de alagamento por mm de chuva (pior drenagem no topo)</p>
+        <table id="tbDrenagem"></table>
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <h2>Impacto</h2>
+      <p class="q">Quantas pessoas o alerta protege?</p>
+      <div class="impact" id="impacto"></div>
+      <p class="note" id="notaImpacto"></p>
+    </section>
+
+    <footer>
+      <span>Fonte: camada Ouro · <code>ouro_vw_mvp_alertas</code> (Open-Meteo, IBGE e relatos de cidadãos)</span>
+      <span id="atualizado"></span>
+      <span>Nenhum dado pessoal é exibido (LGPD).</span>
+    </footer>
+  </main>
+
+  <div id="vazio" class="card empty" hidden>
+    <h2>Carregue o extrato da Ouro</h2>
+    <p class="q">Não encontrei <code>mvp_alertas.json</code> ao lado desta página. Selecione o arquivo exportado do Databricks.</p>
+    <input type="file" id="arquivo" accept=".json,application/json">
+  </div>
+</div>
+
+<script>
+const LIMITE_ALERTA = 7.6;
+const INTENS = ["sem chuva","fraca","moderada","forte","violenta"];
+const COR = i => `var(--i${i})`;
+const fmt = (n, d=0) => Number(n).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ns = "http://www.w3.org/2000/svg";
+const $ = id => document.getElementById(id);
+
+let D, dias, municipios, porMunDia, estado;
+
+function lerPref(k, def){ try { return localStorage.getItem(k) ?? def } catch { return def } }
+function salvarPref(k, v){ try { localStorage.setItem(k, v) } catch {} }
+
+async function iniciar(){
+  let dados = window.DADOS_OURO || null;
+  if(!dados){
+    try { const r = await fetch("mvp_alertas.json", {cache:"no-store"}); if(r.ok) dados = await r.json(); } catch {}
+  }
+  if(!dados){ $("vazio").hidden = false;
+    $("arquivo").addEventListener("change", async e => {
+      const f = e.target.files[0]; if(!f) return;
+      try { preparar(JSON.parse(await f.text())); } catch { alert("Arquivo inválido"); }
+    });
+    return;
+  }
+  preparar(dados);
+}
+
+function preparar(dados){
+  D = dados.map(r => ({...r, chuva_mm:+r.chuva_mm||0, hora:+r.hora, populacao:+r.populacao,
+        qtd_relatos:+r.qtd_relatos||0, qtd_relatos_agua_alta:+r.qtd_relatos_agua_alta||0,
+        em_alerta: r.em_alerta===true || r.em_alerta==="true", nivel: INTENS.indexOf(r.intensidade)}));
+  dias = [...new Set(D.map(r => r.data))].sort();
+  const mm = new Map();
+  D.forEach(r => mm.set(r.codigo_ibge, {codigo:r.codigo_ibge, nome:r.municipio, pop:r.populacao, lat:+r.latitude, lon:+r.longitude}));
+  municipios = [...mm.values()].sort((a,b) => a.nome.localeCompare(b.nome,"pt-BR"));
+  porMunDia = new Map();
+  D.forEach(r => { const k = r.codigo_ibge+"|"+r.data; if(!porMunDia.has(k)) porMunDia.set(k, []); porMunDia.get(k).push(r); });
+
+  const diaAlerta = new Set(D.filter(r => r.em_alerta).map(r => r.data));
+  $("selDia").innerHTML = dias.slice().reverse().map((d,i) =>
+    `<option value="${d}">${dataBR(d)}${i===0?" · mais recente":""}${diaAlerta.has(d)?" · ⚠ alerta":""}</option>`).join("");
+  $("selMun").innerHTML = municipios.map(m => `<option value="${m.codigo}">${esc(m.nome)}</option>`).join("");
+
+  const munPref = lerPref("gs_mun", null);
+  estado = { mun: municipios.some(m => String(m.codigo)===munPref) ? +munPref : (municipios.find(m=>m.nome==="São Paulo")||municipios[0]).codigo,
+             dia: dias[dias.length-1] };
+  $("selMun").value = estado.mun; $("selDia").value = estado.dia;
+  $("selMun").onchange = e => { estado.mun = +e.target.value; salvarPref("gs_mun", estado.mun); render(); };
+  $("selDia").onchange = e => { estado.dia = e.target.value; render(); };
+
+  $("vazio").hidden = true; $("app").hidden = false; $("controls").hidden = false;
+  $("atualizado").textContent = `Dados de ${dataBR(dias[0])} a ${dataBR(dias[dias.length-1])} · ${fmt(D.length)} registros`;
+  renderFixos();
+  render();
+}
+
+function dataBR(d){ const [y,m,dd] = d.split("-"); return `${dd}/${m}/${y}`; }
+function horasDo(mun, dia){ return (porMunDia.get(mun+"|"+dia) || []).slice().sort((a,b) => a.hora-b.hora); }
+
+function render(){
+  const mun = municipios.find(m => m.codigo===estado.mun);
+  const hs = horasDo(estado.mun, estado.dia);
+  const alerta = hs.filter(r => r.em_alerta);
+  const pico = hs.reduce((a,r) => r.chuva_mm>a.chuva_mm ? r : a, {chuva_mm:0, hora:null, nivel:0});
+  const total = hs.reduce((s,r) => s+r.chuva_mm, 0);
+  const relatos = hs.reduce((s,r) => s+r.qtd_relatos, 0);
+  const recente = estado.dia === dias[dias.length-1];
+
+  $("tituloDia").textContent = `${recente ? "Hoje" : "Dia"} em ${mun.nome} · ${dataBR(estado.dia)}`;
+  const st = $("status");
+  if(alerta.length){
+    const h0 = alerta[0].hora, h1 = alerta[alerta.length-1].hora + 1;
+    st.className = "status warn";
+    st.innerHTML = `<b>⚠ Alerta de chuva ${esc(INTENS[pico.nivel])} das ${h0}h às ${h1}h</b>
+      <span>Pico de ${fmt(pico.chuva_mm,1)} mm/h às ${pico.hora}h. Evite sair nesse horário e não atravesse ruas alagadas.</span>`;
+  } else {
+    st.className = "status ok";
+    st.innerHTML = `<b>Sem chuva forte ${recente ? "prevista" : "registrada"}</b>
+      <span>${total>0 ? `Chuva ${esc(INTENS[pico.nivel])}, com pico de ${fmt(pico.chuva_mm,1)} mm/h às ${pico.hora}h.` : "Nenhuma chuva no dia."}</span>`;
+  }
+  $("kpis").innerHTML = [
+    [fmt(pico.chuva_mm,1), "pico (mm/h)"], [fmt(total,1), "chuva no dia (mm)"],
+    [alerta.length, "horas em alerta"], [fmt(relatos), "relatos de alagamento"]
+  ].map(([v,l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  graficoHoras(hs);
+  mapa();
+  document.querySelectorAll("#tbRanking tr[data-c], #tbDrenagem tr[data-c]").forEach(tr =>
+    tr.classList.toggle("sel", +tr.dataset.c === estado.mun));
+}
+
+function el(tag, attrs, parent, text){
+  const e = document.createElementNS(ns, tag);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  if(text!=null) e.textContent = text;
+  parent.appendChild(e); return e;
+}
+
+function graficoHoras(hs){
+  const svg = $("chHoras"); svg.innerHTML = "";
+  const W=600, H=200, L=34, R=8, T=10, B=24;
+  const max = Math.max(LIMITE_ALERTA*1.3, ...hs.map(r => r.chuva_mm));
+  const y = v => T + (H-T-B) * (1 - v/max);
+  const bw = (W-L-R)/24;
+  [0, Math.round(max/2), Math.floor(max)].forEach(v => {
+    el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:"var(--line)"},svg);
+    el("text",{x:L-6,y:y(v)+4,"text-anchor":"end","font-size":11,fill:"var(--muted)"},svg,v);
+  });
+  hs.forEach(r => {
+    const h = Math.max(1, (H-T-B) - (y(r.chuva_mm)-T));
+    const b = el("rect",{x:L+r.hora*bw+2,y:H-B-h,width:bw-4,height:h,rx:3,fill:COR(Math.max(0,r.nivel))},svg);
+    el("title",{},b,`${r.hora}h · ${fmt(r.chuva_mm,1)} mm/h · ${r.intensidade} · ${r.qtd_relatos} relatos`);
+    if(r.hora%3===0) el("text",{x:L+r.hora*bw+bw/2,y:H-6,"text-anchor":"middle","font-size":11,fill:"var(--muted)"},svg,r.hora+"h");
+  });
+  el("line",{x1:L,x2:W-R,y1:y(LIMITE_ALERTA),y2:y(LIMITE_ALERTA),stroke:"var(--i4)","stroke-dasharray":"5 4"},svg);
+  el("text",{x:W-R,y:y(LIMITE_ALERTA)-5,"text-anchor":"end","font-size":11,fill:"var(--i4)"},svg,"limite de alerta 7,6 mm/h");
+  $("legend").innerHTML = INTENS.map((n,i) => `<span><i style="background:${COR(i)}"></i>${n}</span>`).join("");
+}
+
+function mapa(){
+  const svg = $("mapa"); svg.innerHTML = "";
+  const W=420, H=330, P=48;
+  const lats = municipios.map(m=>m.lat), lons = municipios.map(m=>m.lon);
+  const [la0,la1,lo0,lo1] = [Math.min(...lats),Math.max(...lats),Math.min(...lons),Math.max(...lons)];
+  const sx = (W-2*P)/(lo1-lo0), sy = (H-2*P)/(la1-la0), s = Math.min(sx, sy);
+  const ox = (W - (lo1-lo0)*s)/2, oy = (H - (la1-la0)*s)/2;
+  const px = lon => ox + (lon-lo0)*s, py = lat => oy + (la1-lat)*s;
+  const pmax = Math.max(...municipios.map(m=>m.pop));
+  const camadaCirculos = el("g",{},svg), camadaNomes = el("g",{"pointer-events":"none"},svg);
+  [...municipios].sort((a,b) => (a.codigo===estado.mun) - (b.codigo===estado.mun)).forEach(m => {
+    const hs = horasDo(m.codigo, estado.dia);
+    const nivel = Math.max(0, ...hs.map(r=>r.nivel));
+    const rel = hs.reduce((s,r)=>s+r.qtd_relatos,0);
+    const r = 6 + 13*Math.sqrt(m.pop/pmax);
+    const sel = m.codigo===estado.mun;
+    const c = el("circle",{cx:px(m.lon),cy:py(m.lat),r,fill:COR(nivel),"fill-opacity":.85,style:"cursor:pointer",
+      stroke: sel ? "var(--ink)" : "var(--card)","stroke-width": sel ? 3 : 1.5},camadaCirculos);
+    el("title",{},c,`${m.nome}: chuva ${INTENS[nivel]} · ${rel} relatos`);
+    c.addEventListener("click", () => { estado.mun = m.codigo; $("selMun").value = m.codigo; salvarPref("gs_mun", m.codigo); render(); });
+    const curto = m.nome.replace("São Bernardo do Campo","S. Bernardo").replace("São Caetano do Sul","S. Caetano").replace("Taboão da Serra","Taboão");
+    el("text",{x:px(m.lon),y:py(m.lat)+r+12,"text-anchor":"middle","font-weight": sel?700:400},camadaNomes,curto);
+  });
+}
+
+function renderFixos(){
+  // Q2 · ranking 30 dias
+  const ref = new Date(dias[dias.length-1]+"T00:00:00"); const ini = new Date(ref); ini.setDate(ini.getDate()-29);
+  const iniS = ini.toISOString().slice(0,10);
+  const rk = municipios.map(m => {
+    const rs = D.filter(r => r.codigo_ibge===m.codigo && r.data>=iniS);
+    return {m, horas: rs.filter(r=>r.em_alerta).length, chuva: rs.reduce((s,r)=>s+r.chuva_mm,0)};
+  }).sort((a,b) => b.horas-a.horas || b.chuva-a.chuva);
+  const hmax = Math.max(1, ...rk.map(x=>x.horas));
+  $("tbRanking").innerHTML = `<tr><th>#</th><th>Município</th><th class="n">Horas</th><th style="width:30%"></th></tr>` +
+    rk.map((x,i) => `<tr data-c="${x.m.codigo}"><td>${i+1}</td><td>${esc(x.m.nome)}</td><td class="n">${x.horas}</td>
+      <td><div class="bar" style="width:${100*x.horas/hmax}%;background:var(--i3)"></div></td></tr>`).join("");
+
+  // Q3 · horário de risco
+  const porHora = Array.from({length:24}, (_,h) => D.filter(r => r.hora===h && r.em_alerta).length);
+  const svg = $("chHorario"); svg.innerHTML = "";
+  const W=320,H=190,L=8,R=8,T=10,B=22, bw=(W-L-R)/24, mx=Math.max(1,...porHora);
+  porHora.forEach((v,h) => {
+    const hh = (H-T-B)*v/mx;
+    const b = el("rect",{x:L+h*bw+1,y:H-B-hh,width:bw-2,height:Math.max(1,hh),rx:2,fill: v ? "var(--i3)" : "var(--i0)"},svg);
+    el("title",{},b,`${h}h: ${v} horas em alerta`);
+    if(h%6===0) el("text",{x:L+h*bw+bw/2,y:H-6,"text-anchor":"middle","font-size":11,fill:"var(--muted)"},svg,h+"h");
+  });
+  const top = porHora.map((v,h)=>({v,h})).filter(x=>x.v).sort((a,b)=>b.v-a.v).slice(0,3).map(x=>x.h+"h");
+  const manha = porHora.slice(6,12).reduce((a,b)=>a+b,0);
+  $("dicaHorario").textContent = top.length ? `Horários mais críticos: ${top.join(", ")}.${manha===0 ? " Manhãs sem nenhuma hora de alerta: prefira se deslocar cedo." : ""}` : "Nenhuma hora de alerta no período.";
+
+  // Q4 · drenagem
+  const dr = municipios.map(m => {
+    const rs = D.filter(r => r.codigo_ibge===m.codigo);
+    const ch = rs.reduce((s,r)=>s+r.chuva_mm,0), rel = rs.reduce((s,r)=>s+r.qtd_relatos,0);
+    return {m, rel, ind: ch ? rel/ch : 0};
+  }).sort((a,b) => b.ind-a.ind);
+  const imax = Math.max(...dr.map(x=>x.ind)) || 1;
+  $("tbDrenagem").innerHTML = `<tr><th>Município</th><th class="n">Relatos</th><th class="n">por mm</th><th style="width:26%"></th></tr>` +
+    dr.map(x => `<tr data-c="${x.m.codigo}"><td>${esc(x.m.nome)}</td><td class="n">${fmt(x.rel)}</td><td class="n">${fmt(x.ind,2)}</td>
+      <td><div class="bar" style="width:${100*x.ind/imax}%"></div></td></tr>`).join("");
+
+  // Q5 · impacto
+  const popTotal = municipios.reduce((s,m)=>s+m.pop,0);
+  let pessoasDia = 0, diasAlerta = new Set();
+  dias.forEach(d => municipios.forEach(m => {
+    if(horasDo(m.codigo,d).some(r=>r.em_alerta)){ pessoasDia += m.pop; diasAlerta.add(d); }
+  }));
+  const altaTot = D.reduce((s,r)=>s+r.qtd_relatos_agua_alta,0);
+  const altaCob = D.filter(r=>r.em_alerta).reduce((s,r)=>s+r.qtd_relatos_agua_alta,0);
+  $("impacto").innerHTML = [
+    [fmt(popTotal), "moradores monitorados em 10 municípios"],
+    [`${diasAlerta.size} de ${dias.length}`, "dias com alerta de chuva forte"],
+    [fmt(pessoasDia), "pessoas-dia avisadas com antecedência"],
+    [altaTot ? fmt(100*altaCob/altaTot,1)+"%" : "–", "dos alagamentos graves ocorreram com alerta ativo"]
+  ].map(([v,l]) => `<div><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+  $("notaImpacto").textContent = `Alagamentos graves = relatos com água no joelho ou na cintura (${fmt(altaTot)} no período). ` +
+    (altaTot && altaCob/altaTot < .5 ? "A maioria aconteceu com chuva moderada, abaixo do limite de 7,6 mm/h: o próximo passo do produto é alertar também a chuva moderada nos municípios com pior drenagem." : "");
+}
+
+iniciar();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Acrescenta a pasta chegada/ ao docker-compose.yaml oficial do Airflow 3.
+# O Docker Compose junta este arquivo com o docker-compose.yaml automaticamente.
+# Os arquivos que o DAG grava em /opt/airflow/chegada aparecem em ./chegada no seu computador.
+services:
+  airflow-worker:
+    volumes:
+      - ./chegada:/opt/airflow/chegada
+  airflow-scheduler:
+    volumes:
+      - ./chegada:/opt/airflow/chegada
