@@ -1,0 +1,59 @@
+name: pipeline
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  seguranca:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks (procura senhas e chaves)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Semgrep (procura falhas no codigo)
+        run: |
+          pip install semgrep
+          semgrep scan --config auto --error --exclude databricks --exclude amostras --exclude mvp_alertas.json .
+
+      - name: Build da imagem
+        run: docker build -t mvp:${{ github.sha }} .
+
+      - name: Trivy (procura vulnerabilidades na imagem)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: mvp:${{ github.sha }}
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  deploy:
+    needs: seguranca
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      - name: Publicar na AWS
+        env:
+          INSTANCE_ID: ${{ secrets.INSTANCE_ID }}
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["export HOME=/root","cd /opt/mvp","git pull","docker compose -f docker-compose.mvp.yml up -d --build"]' \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
