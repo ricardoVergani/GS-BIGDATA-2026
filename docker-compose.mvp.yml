@@ -4,4 +4,15 @@ services:
     container_name: mvp-alerta-chuva
     ports:
       - "80:8080"
-    restart: unless-stopped 
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  exporter:
+    image: nginx/nginx-prometheus-exporter:1.5.3
+    container_name: mvp-exporter
+    command:
+      - --nginx.scrape-uri=http://mvp:8080/stub_status
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
