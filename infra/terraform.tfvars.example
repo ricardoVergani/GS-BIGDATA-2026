@@ -1,0 +1,2 @@
+nome_projeto   = "gs-alerta-chuva"
+tipo_instancia = "t3.micro"
