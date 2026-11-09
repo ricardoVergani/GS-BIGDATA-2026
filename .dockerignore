@@ -1,0 +1,12 @@
+.git
+.env
+logs/
+config/
+plugins/
+chegada/
+dags/
+databricks/
+amostras/
+infra/
+*.tfstate
+*.tfvars

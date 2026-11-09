@@ -13,3 +13,9 @@ chegada/
 __pycache__/
 *.pyc
 .venv/
+
+# terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/

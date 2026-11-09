@@ -1,0 +1,7 @@
+services:
+  mvp:
+    build: .
+    container_name: mvp-alerta-chuva
+    ports:
+      - "80:8080"
+    restart: unless-stopped 
