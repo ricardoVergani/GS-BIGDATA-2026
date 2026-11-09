@@ -69,7 +69,7 @@ resource "aws_instance" "mvp" {
     mkdir -p /usr/local/lib/docker/cli-plugins
     curl -SL https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
     chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-    git clone https://github.com/zBaldd/GS-BIGDATA-2026.git /opt/mvp
+    git clone https://github.com/ricardoVergani/GS-BIGDATA-2026.git /opt/mvp
     cd /opt/mvp
     docker compose -f docker-compose.mvp.yml up -d --build
   EOF

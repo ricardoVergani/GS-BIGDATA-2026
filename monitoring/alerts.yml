@@ -1,0 +1,20 @@
+groups:
+  - name: mvp
+    rules:
+      - alert: SiteForaDoAr
+        expr: probe_success{job="site-blackbox"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "MVP fora do ar"
+          description: "O teste de disponibilidade do site 54.85.25.247 falhou."
+
+      - alert: LatenciaAlta
+        expr: probe_duration_seconds{job="site-blackbox"} > 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia alta no MVP"
+          description: "O site demorou mais de 1 segundo para responder."

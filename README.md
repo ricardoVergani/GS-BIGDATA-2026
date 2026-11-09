@@ -1,6 +1,6 @@
 # Alerta de Chuva Forte e Alagamento · Grande SP
 
-**GS 2026.2 · CitizenTech · Big Data Architecture & Data Integration**
+**GS 2026.2 · CitizenTech · Cloud**
 
 ## Integrantes
 
@@ -12,137 +12,92 @@
 | Pedro Barros | RM97937 |
 
 
-## O produto em uma frase
+## Deploy Blindado (DevSecOps)
 
-Um app que avisa o cidadão de São Paulo quando vai chover forte no município dele e mostra onde outros cidadãos estão relatando alagamento, para ele planejar o deslocamento com segurança.
+### Ficha Técnica do MVP
 
-### Perguntas que o MVP responde
+| Item | Descrição |
+|---|---|
+| Nome | Alerta de Chuva Forte e Alagamento · Grande SP |
+| Problema | Avisar o cidadão quando vai chover forte no município dele |
+| O que está no ar | Página web estática (`mvp/`) com o extrato da camada Ouro |
+| URL pública | http://54.85.25.247 |
+| Nuvem | AWS (AWS Academy), região us-east-1, EC2 t3.micro |
+| Stack | nginx (container), Docker Compose, Terraform, GitHub Actions, Prometheus, Grafana |
+| Integrantes | <nomes e RMs, como na seção acima> |
 
-1. Vai chover forte hoje no meu município? A partir de que horas?
-2. Quais municípios tiveram mais horas de chuva forte nos últimos 30 dias?
-3. Em que horário do dia a chuva forte costuma cair?
-4. Onde os cidadãos mais relatam alagamento, e isso bate com a chuva medida?
-5. **Impacto:** quantas pessoas o alerta protege?
-
-## Arquitetura
+### Arquitetura
 
 ```mermaid
 flowchart LR
-    A[Open-Meteo<br/>chuva horária] --> D
-    B[IBGE<br/>população Censo 2022] --> D
-    C[Relatos de alagamento<br/>simulados] --> D
-    D[Airflow 3<br/>DAG gs_coleta @daily] --> E[chegada/<br/>pasta local]
-    E -- upload manual em lotes --> F[Volume Databricks<br/>/Volumes/workspace/gs/chegada]
-    F -- Auto Loader --> G[Bronze<br/>cópia fiel]
-    G -- tipos, regras, MERGE --> H[Prata<br/>tratada e sem duplicatas]
-    H --> I[Ouro<br/>fato + dimensões + LGPD]
-    I -- extrato CSV/JSON --> J[MVP<br/>tela do cidadão]
+    U[Usuário] -->|HTTP 80| SG[Security Group<br/>somente porta 80]
+    subgraph AWS["AWS · us-east-1"]
+      SG --> EC2[EC2 t3.micro<br/>Docker: nginx + exporter]
+    end
+    DEV[Desenvolvedor] -->|git push| GH[GitHub]
+    GH --> ACT[GitHub Actions<br/>Gitleaks · Semgrep · Trivy]
+    ACT -->|aprovado: deploy via SSM| EC2
+    TF[Terraform] -->|cria| AWS
+    MON[Prometheus + Grafana<br/>local] -->|lê /metrics e testa a URL| EC2
 ```
 
-O Databricks Free Edition não se conecta ao Airflow: o DAG grava em `chegada/` e os arquivos sobem ao Volume pela interface, em lotes.
+### Como reproduzir
 
-## Fontes de dados
+1. **Container local:** `docker compose -f docker-compose.mvp.yml up --build -d` e abra http://localhost.
+2. **Infraestrutura:** coloque as chaves do AWS Academy em `~/.aws/credentials`, entre em `infra/`, copie `terraform.tfvars.example` para `terraform.tfvars` e rode `terraform init`, `terraform plan`, `terraform apply`.
+3. **Pipeline:** em Settings → Secrets and variables → Actions, cadastre `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` (mudam a cada Start Lab) e `INSTANCE_ID` (`terraform output instance_id`). Cada push roda Gitleaks, Semgrep e Trivy; na `main`, o deploy é automático.
+4. **Monitoramento:** copie `monitoring/.env.example` para `monitoring/.env`, defina a senha do Grafana e rode `docker compose up -d` em `monitoring/`. Prometheus em http://localhost:9090 e Grafana em http://localhost:3000.
 
-| Fonte | Origem | Formato | Frequência | Chave? | Pergunta do MVP |
-|---|---|---|---|---|---|
-| Open-Meteo (real) | `https://api.open-meteo.com/v1/forecast` | JSON (gravado como JSON Lines, 1 linha por município) | diária, 24 horas por coleta | não | 1, 2, 3, 4, 5 |
-| IBGE (real) | `https://servicodados.ibge.gov.br/api/v3/agregados/4709/periodos/2022/variaveis/93` | JSON (JSON Lines, 1 linha por município) | diária (cadastro estável; a Prata deduplica) | não | 2, 5 |
-| Relatos de alagamento (**simulado**) | gerador `gerar_linhas_relatos` em `dags/gs_coleta.py` | JSON Lines, 1 linha por relato | diária | token em Variable `GS_TOKEN_API_RELATOS` | 4, 5 |
+### Segurança aplicada
 
-As fontes se cruzam pelo **código IBGE do município** e pela **data/hora**.
+- Imagem enxuta (Alpine), usuário **não-root** (`nginx`), pacotes atualizados e nenhum segredo dentro da imagem.
+- `terraform.tfstate`, `*.tfvars` e `.env` ficam fora do repositório (`.gitignore`).
+- **Nenhuma porta de administração aberta.** O Security Group libera só a porta 80; não há SSH. O deploy usa AWS Systems Manager (SSM).
+- Disco da instância criptografado e metadados da instância protegidos (IMDSv2).
+- Ferramentas do pipeline fixadas por SHA de commit (proteção contra ataque à cadeia de suprimentos).
+- **Exceção aceita no Semgrep:** o `proxy_pass` de `/metrics` tem destino fixo (não controlado pelo visitante), e a regra `missing-internal` foi marcada com `nosemgrep`.
+- **Risco aceito:** `/metrics` é público, pois o Prometheus local precisa lê-lo pela URL. Ele expõe só contadores do nginx. Melhoria futura: restringir por IP ou usar autenticação.
 
-**Sobre os dados simulados.** Os relatos representam o que o app receberia dos cidadãos. O gerador:
-- lê a chuva real do mesmo dia: mais chuva gera mais relatos e água mais alta; a chuva da hora anterior também conta (a água demora a escoar);
-- dá a cada município um fator de drenagem fixo (alguns alagam mais);
-- usa semente fixa por dia, então rodar de novo gera o mesmo arquivo;
-- injeta ~3% de registros com defeito (sem data, município inexistente, GPS zerado) e ~2% de reenvios duplicados, para exercitar as regras de qualidade e a deduplicação da Prata;
-- gera **somente dados pessoais fictícios** (nomes aleatórios, e-mails no domínio reservado `.invalid`).
+### Observabilidade (4 sinais de ouro)
 
-## Estrutura do repositório
+| Sinal | Como medimos |
+|---|---|
+| Latência | `probe_duration_seconds` (Blackbox Exporter, de fora) |
+| Tráfego | `rate(nginx_http_requests_total[2m])` |
+| Erros | % de checagens com falha (`probe_success`) |
+| Saturação | `nginx_connections_active` (limite de 1024) |
 
-```
-dags/gs_coleta.py            DAG do Airflow (coleta + gerador de relatos)
-databricks/00_setup.ipynb       schema, Volume e pastas
-databricks/01_bronze.ipynb      Auto Loader incremental + contagens
-databricks/02_prata.ipynb     tipos, regras de qualidade, quarentena, MERGE
-databricks/03_ouro.ipynb       star schema, LGPD, 5 consultas, extrato para o MVP
-mvp/index.html               o mvp funcionando com os dados do mvp_alertas.json
-amostras/                    um arquivo de cada fonte
-docker-compose.yaml          oficial do Airflow 3
-docker-compose.override.yml  monta a pasta chegada/ nos containers
-```
+Alerta `SiteForaDoAr`: dispara quando a checagem falha por 30 s. Foi testado simulando indisponibilidade (checagem apontada para uma porta fechada).
 
-## Como reproduzir
+### Matriz de responsabilidade compartilhada
 
-### 1. Airflow (máquina local)
-
-Pré-requisitos: Docker Desktop (com WSL 2 no Windows, pelo menos 4 GB de RAM para o Docker) e Git.
-
-```bash
-git clone <este repositório> && cd <pasta>
-cp .env.example .env               # Windows: copy .env.example .env
-curl -LfO https://airflow.apache.org/docs/apache-airflow/stable/docker-compose.yaml   # Windows: curl.exe
-mkdir -p logs plugins config chegada
-docker compose up airflow-init
-docker compose up -d
-```
-
-1. Abra http://localhost:8080 (usuário `airflow`, senha `airflow`).
-2. **Admin → Variables → +**: chave `GS_TOKEN_API_RELATOS`, valor qualquer texto. O nome contém `TOKEN`, então o Airflow oculta o valor.
-3. Ative o DAG `gs_coleta`. Com `catchup=True` e `start_date` em 01/10/2026, ele coleta todos os dias desde então.
-4. Os arquivos aparecem em `chegada/clima/`, `chegada/ibge/` e `chegada/relatos/`.
-
-### 2. Databricks Free Edition
-
-1. Importe os 4 arquivos de `databricks/` (Workspace → Import).
-2. Rode `00_setup`. Crie um `sal.txt` com um texto aleatório e envie para `/Volumes/workspace/gs/chegada/_controle/` (**não** versionar).
-3. **Lote 1:** envie ao Volume os arquivos de 01/10 a 20/10, cada um na subpasta da sua fonte. Rode `01_bronze` com `MOMENTO = "1 - apos lote 1"`.
-4. **Lote 2:** envie os arquivos de 21/10 em diante. Rode `01_bronze` com `MOMENTO = "2 - apos lote 2"`.
-5. Rode `01_bronze` de novo, sem arquivo novo, com `MOMENTO = "3 - reexecucao sem arquivo novo"`.
-6. Rode `02_prata` **duas vezes** (a 2ª não insere nada).
-7. Rode `03_ouro`. O extrato do MVP fica em `/Volumes/workspace/gs/chegada/_export/`.
-
-## Camadas
-
-| Camada | Tabelas | Chave / grão |
+| Camada | AWS | Equipe |
 |---|---|---|
-| Bronze | `bronze_clima`, `bronze_ibge`, `bronze_relatos` | cópia fiel + `arquivo_origem`, `carregado_em` |
-| Prata | `prata_clima` | `codigo_ibge` + `data_hora` |
-| | `prata_ibge` | `codigo_ibge` |
-| | `prata_relatos` (+ `prata_quarentena_relatos`) | `id_relato` |
-| Ouro | `ouro_fato_chuva` | **uma linha por município por hora** |
-| | `ouro_dim_tempo`, `ouro_dim_municipio`, `ouro_dim_intensidade` | `id_tempo`, `codigo_ibge`, `id_intensidade` |
-| | `ouro_relatos` | relatos com dados pessoais protegidos |
+| Datacenter, hardware, rede global, hipervisor | ✅ | |
+| Mecanismo de firewall e de criptografia (EBS/KMS) | ✅ | |
+| Regras do Security Group e ativar criptografia | | ✅ |
+| Sistema operacional da instância e atualizações | | ✅ |
+| Docker, imagem e dependências | | ✅ |
+| Código do MVP e dados | | ✅ |
+| Credenciais, segredos e pipeline | | ✅ |
+| Monitoramento e resposta a alertas | | ✅ |
 
-**Regras de qualidade da Prata:** clima (data/hora nula · chuva nula ou negativa · temperatura fora de -10 a 50 °C), IBGE (código nulo · população inválida), relatos (data/hora nula · município fora do cadastro IBGE · coordenada fora da Grande SP). As contagens ficam em `prata_regras_qualidade`.
+### LGPD: localização e proteção dos dados pessoais
 
-**Intensidade da chuva:** fraca < 2,5 mm/h · moderada 2,5 a 7,6 · forte 7,6 a 50 · violenta ≥ 50. Forte e violenta geram **alerta**.
+- **No servidor da AWS (us-east-1) não há dados pessoais do cidadão.** O MVP publica só o extrato agregado por município (chuva, população, contagem de relatos).
+- Dados pessoais existem **apenas na camada de relatos**, que é **simulada** (nomes aleatórios e e-mails `.invalid`), no pipeline Airflow/Databricks. Proteções na camada Ouro: nome removido (minimização), e-mail com hash e sal fora do repositório, telefone mascarado, localização arredondada (~100 m).
+- Região do Databricks: <confira no seu workspace e escreva aqui>.
+- O nginx registra o **endereço IP** de quem acessa (dado pessoal pela LGPD). Os logs ficam só no container, sem envio a terceiros, e são descartados quando o container é recriado.
+- Disco do servidor criptografado, acesso administrativo só por SSM e menor privilégio no deploy.
 
-## LGPD
+### Estimativa de custo (AWS, us-east-1, uso 24x7)
 
-| Dado pessoal | Onde aparece | Tratamento na Ouro |
+| Item | Cálculo | US$/mês |
 |---|---|---|
-| Nome | relatos | não levado adiante (minimização) |
-| E-mail | relatos | hash `sha2(lower(email) + sal, 256)`; sal fora do código e do repositório |
-| Telefone | relatos | máscara `(11) *****-1234` |
-| Localização exata | relatos | arredondada a 3 casas decimais (~100 m) |
+| EC2 t3.micro | 730 h × 0,0104 | ≈ 7,59 |
+| IP público (Elastic IP) | 730 h × 0,005 | ≈ 3,65 |
+| Disco EBS gp3 8 GB | 8 × 0,08 | ≈ 0,64 |
+| Transferência de saída | tráfego baixo, dentro da franquia gratuita | ≈ 0 |
+| **Total** | | **≈ 11,9** |
 
-## Contrato com o MVP
-
-- **Origem:** view `workspace.gs.ouro_vw_mvp_alertas`, exportada como `mvp_alertas.csv` e `mvp_alertas.json`.
-- **Atualização:** diária, depois da carga dos lotes e da execução de `02_prata` e `03_ouro`.
-- **Leitura pelo MVP:** o app carrega o extrato no seu banco ou lê o JSON diretamente. Nenhum dado pessoal vai para o MVP.
-
-| Coluna | Tipo | Descrição |
-|---|---|---|
-| codigo_ibge | int | código IBGE do município |
-| municipio | string | nome do município |
-| populacao | bigint | população (Censo 2022) |
-| latitude, longitude | double | ponto do município para o mapa |
-| data_hora | timestamp | hora (America/Sao_Paulo) |
-| data, hora, periodo_dia | date, int, string | recortes de tempo |
-| chuva_mm | double | chuva na hora (mm) |
-| intensidade | string | sem chuva, fraca, moderada, forte, violenta |
-| em_alerta | boolean | true para chuva forte ou violenta |
-| temperatura_c, rajada_kmh | double | contexto do tempo |
-| qtd_relatos, qtd_relatos_agua_alta | bigint | relatos de alagamento na hora |
+GitHub Actions (repositório público) e Prometheus/Grafana (rodam localmente) não têm custo. No AWS Academy não há cobrança real (orçamento do laboratório: US$ 50). Valores confirmados na AWS Pricing Calculator.

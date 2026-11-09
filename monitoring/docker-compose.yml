@@ -1,0 +1,40 @@
+# Monitoramento local: roda no SEU computador e observa o MVP publicado na AWS.
+# Subir:  docker compose up -d      Parar:  docker compose down
+services:
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    container_name: mon-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"   # so acessivel no seu computador
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.1
+    container_name: mon-blackbox
+    volumes:
+      - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:13.2.5
+    container_name: mon-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?crie o arquivo .env com GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"   # so acessivel no seu computador
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
